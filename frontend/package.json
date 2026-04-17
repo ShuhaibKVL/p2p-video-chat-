@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Next.js frontend for peer-to-peer video/audio chat with WebRTC",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0 -p 3002",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
