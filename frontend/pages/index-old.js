@@ -1,118 +1,176 @@
-'use client'; // Mark this as a client component
-
 /**
  * pages/index.js
  * 
  * MAIN PAGE - Next.js React Component
  * 
  * This is the main user interface for the P2P video chat application.
+ * 
+ * STRUCTURE:
+ * 1. Input form for username registration
+ * 2. List of available peers to call
+ * 3. Incoming call notification (if someone calls)
+ * 4. Video display area (local + remote)
+ * 5. Call control buttons (accept/decline/end call)
+ * 
+ * STATE MANAGEMENT:
+ * We use React useState hooks to manage:
+ * - Current username
+ * - List of available peers
+ * - Call state (in call, incoming call, etc.)
+ * - UI visibility (what to show/hide)
+ * 
+ * EVENT HANDLERS:
+ * Connect UI button clicks to call-flow.js functions
+ * Listen for updates from call-flow.js and update UI
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 
-// Module-level variables to store call-flow functions
-let callFlowModule = null;
-let callState = null;
+// Load call-flow module only on client side (not during SSR)
+let callFlowFunctions = null;
 
-// Load call-flow module dynamically
-async function initializeCallFlow() {
-  if (!callFlowModule) {
-    callFlowModule = await import('../public/js/call-flow.js');
-    callState = callFlowModule.callState;
-  }
-  return callFlowModule;
-}
+const loadCallFlow = async () => {
+  if (callFlowFunctions) return callFlowFunctions;
+  const module = await import('../public/js/call-flow.js');
+  callFlowFunctions = module;
+  return module;
+};
 
-export default function Home() {
+function Home() {
+  // =========================================================================
+  // STATE - React state variables
+  // =========================================================================
+
+  // Form input
   const [usernameInput, setUsernameInput] = useState('');
+
+  // Connection status
   const [connected, setConnected] = useState(false);
   const [currentUsername, setCurrentUsername] = useState('');
+
+  // Peer list
   const [availablePeers, setAvailablePeers] = useState([]);
   const [selectedPeer, setSelectedPeer] = useState(null);
+
+  // Incoming call notification
   const [incomingCall, setIncomingCall] = useState(null);
+
+  // Call state
   const [isInCall, setIsInCall] = useState(false);
   const [callPeerName, setCallPeerName] = useState('');
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
+
+  // Error messages
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Initializing...');
-  const initRef = useRef(false);
 
-  // Update UI from call-flow.js state
+  // =========================================================================
+  // EFFECTS - Run on mount/unmount
+  // =========================================================================
+
+  /**
+   * INITIALIZE APP ON MOUNT
+   * 
+   * This runs once when the page first loads
+   * 
+   * WHAT IT DOES:
+   * 1. Initialize Socket.io connection
+   * 2. Set up event handlers
+   * 3. Initialize media manager
+   * 4. Set up UI update callbacks
+   */
+  useEffect(() => {
+    const init = async () => {
+      // Load call-flow module dynamically on client side
+      const { initializeApp } = await loadCallFlow();
+      
+      // Initialize the app
+      initializeApp();
+
+      // Set up callback for call-flow.js to update UI
+      window.updateUI = updateUI;
+      window.displayRemoteStream = displayRemoteStream;
+
+    setStatus('Ready to register');
+
+    // Cleanup on unmount
+    return () => {
+      cleanup();
+    };
+  }, []);
+
+  // =========================================================================
+  // CALLBACK FUNCTIONS - Called by call-flow.js
+  // =========================================================================
+
+  /**
+   * UPDATE UI - Called whenever state changes
+   * 
+   * This function reads from callState and updates React state
+   * Called by call-flow.js whenever something significant happens
+   */
   function updateUI() {
-    if (!callState) return;
     setConnected(callState.connected);
     setCurrentUsername(callState.username || '');
-    setAvailablePeers([...(callState.availablePeers || [])]);
+    setAvailablePeers([...callState.availablePeers]);
     setIncomingCall(callState.incomingCallData);
     setIsInCall(callState.isInCall);
     setCallPeerName(callState.currentPeerUsername || '');
-    setHasRemoteStream(!!callState.peerConnection?.remoteDescription);
+    setHasRemoteStream(!!callState.peerConnection?.getRemoteStream());
   }
 
-  // Display remote stream
+  /**
+   * DISPLAY REMOTE STREAM
+   * 
+   * Called when we receive the remote peer's video/audio
+   * 
+   * @param {MediaStream} remoteStream - The peer's media stream
+   */
   function displayRemoteStream(remoteStream) {
     const remoteVideoElement = document.getElementById('remoteVideo');
     if (remoteVideoElement) {
       remoteVideoElement.srcObject = remoteStream;
-      remoteVideoElement.play().catch(() => {});
+      remoteVideoElement.play();
     }
     setHasRemoteStream(true);
   }
 
-  // Initialize on mount
-  useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
+  // =========================================================================
+  // EVENT HANDLERS - UI user interactions
+  // =========================================================================
 
-    const init = async () => {
-      try {
-        const { initializeApp } = await initializeCallFlow();
-        
-        // Set up UI callbacks
-        window.updateUI = updateUI;
-        window.displayRemoteStream = displayRemoteStream;
-        
-        // Initialize the app
-        await initializeApp();
-        setStatus('Ready to register');
-      } catch (err) {
-        console.error('Init error:', err);
-        setError('Failed to initialize: ' + err.message);
-        setStatus('Initialization failed');
-      }
-    };
-
-    init();
-
-    return () => {
-      if (callFlowModule?.cleanup) {
-        callFlowModule.cleanup();
-      }
-    };
-  }, []);
-
-  // Register
+  /**
+   * USER CLICKED: "Register" button
+   * 
+   * Send username to server
+   */
   const handleRegister = async (e) => {
     e.preventDefault();
     setError('');
+
     try {
       setStatus('Registering...');
-      const { handleRegisterPeer } = await initializeCallFlow();
       await handleRegisterPeer(usernameInput);
       setStatus('Registered! Waiting for peers...');
+      // updateUI is called by socket-client.js
     } catch (err) {
       setError(err.message);
       setStatus('Registration failed');
     }
   };
 
-  // Call peer
+  /**
+   * USER CLICKED: "Call [Peer]" button
+   * 
+   * Request call with this peer
+   */
   const handleCall = async (peer) => {
     setError('');
+    setStatus('Requesting call...');
+
     try {
-      setStatus('Requesting call...');
-      const { handleRequestCall } = await initializeCallFlow();
       await handleRequestCall(peer.username, peer.socketId);
       setSelectedPeer(peer);
       setStatus(`Calling ${peer.username}...`);
@@ -122,13 +180,16 @@ export default function Home() {
     }
   };
 
-  // Accept call
+  /**
+   * USER CLICKED: "Accept" on incoming call
+   */
   const handleAccept = async () => {
     if (!incomingCall) return;
+
     setError('');
+    setStatus('Accepting call...');
+
     try {
-      setStatus('Accepting call...');
-      const { handleAcceptCall } = await initializeCallFlow();
       await handleAcceptCall(incomingCall.fromSocketId, incomingCall.fromUsername);
     } catch (err) {
       setError(err.message);
@@ -136,55 +197,64 @@ export default function Home() {
     }
   };
 
-  // Decline call
-  const handleDecline = async () => {
+  /**
+   * USER CLICKED: "Decline" on incoming call
+   */
+  const handleDecline = () => {
     if (!incomingCall) return;
-    try {
-      const { handleDeclineCall } = await initializeCallFlow();
-      handleDeclineCall(incomingCall.fromSocketId);
-      setIncomingCall(null);
-      setStatus('Call declined');
-    } catch (err) {
-      console.error(err);
-    }
+
+    handleDeclineCall(incomingCall.fromSocketId);
+    setIncomingCall(null);
+    setStatus('Call declined');
   };
 
-  // End call
-  const handleEndCallClick = async () => {
-    try {
-      setStatus('Ending call...');
-      const { handleEndCall } = await initializeCallFlow();
-      handleEndCall();
-      setSelectedPeer(null);
-      setHasRemoteStream(false);
-      setStatus('Call ended');
-    } catch (err) {
-      console.error(err);
-    }
+  /**
+   * USER CLICKED: "End Call" button
+   */
+  const handleEndCallClick = () => {
+    setStatus('Ending call...');
+    handleEndCall();
+    setSelectedPeer(null);
+    setHasRemoteStream(false);
+    setStatus('Call ended');
   };
+
+  // =========================================================================
+  // RENDER - UI HTML
+  // =========================================================================
 
   return (
     <>
       <Head>
         <title>P2P Video Chat - WebRTC + Socket.io</title>
-        <meta name="description" content="Peer-to-peer video chat" />
+        <meta name="description" content="Peer-to-peer video chat using WebRTC" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
       <main style={styles.container}>
+        {/* HEADER */}
         <header style={styles.header}>
           <h1>🎥 P2P Video Chat</h1>
           <p style={styles.subtitle}>WebRTC Peer-to-Peer Communication</p>
         </header>
 
-        {error && <div style={styles.error}>❌ {error}</div>}
+        {/* ERROR DISPLAY */}
+        {error && (
+          <div style={styles.error}>
+            <strong>❌ Error:</strong> {error}
+          </div>
+        )}
 
+        {/* STATUS DISPLAY */}
         <div style={styles.status}>
-          <span style={{ color: connected ? '#4caf50' : '#ff9800' }}>
+          <span style={{
+            color: connected ? '#4caf50' : '#ff9800'
+          }}>
             {connected ? '✅' : '⏳'} {status}
           </span>
         </div>
 
+        {/* REGISTRATION SECTION */}
         {!connected && (
           <section style={styles.section}>
             <h2>📝 Register</h2>
@@ -197,28 +267,43 @@ export default function Home() {
                 style={styles.input}
                 maxLength={20}
               />
-              <button type="submit" style={styles.button}>Register</button>
+              <button type="submit" style={styles.button}>
+                Register
+              </button>
             </form>
+            <p style={styles.hint}>
+              💡 Register with a name to get started
+            </p>
           </section>
         )}
 
+        {/* MAIN INTERFACE ONCE REGISTERED */}
         {connected && (
           <>
+            {/* PEER LIST SECTION */}
             <section style={styles.section}>
               <h2>👥 Available Peers ({availablePeers.length})</h2>
+
               {availablePeers.length === 0 ? (
                 <p style={styles.hint}>⏳ Waiting for other peers...</p>
               ) : (
                 <div style={styles.peerList}>
                   {availablePeers.map((peer) => (
-                    <div key={peer.socketId} style={styles.peerCard}>
+                    <div
+                      key={peer.socketId}
+                      style={{
+                        ...styles.peerCard,
+                        opacity: isInCall && callPeerName !== peer.username ? 0.6 : 1
+                      }}
+                    >
                       <span>{peer.username}</span>
                       <button
                         onClick={() => handleCall(peer)}
                         disabled={isInCall}
                         style={{
                           ...styles.peerButton,
-                          opacity: isInCall ? 0.5 : 1
+                          opacity: isInCall ? 0.5 : 1,
+                          cursor: isInCall ? 'not-allowed' : 'pointer'
                         }}
                       >
                         📞 Call
@@ -229,6 +314,7 @@ export default function Home() {
               )}
             </section>
 
+            {/* INCOMING CALL NOTIFICATION */}
             {incomingCall && (
               <section style={styles.incomingCallBox}>
                 <h3 style={styles.incomingCallTitle}>
@@ -251,10 +337,13 @@ export default function Home() {
               </section>
             )}
 
+            {/* VIDEO SECTION - ALWAYS SHOW IF PREPARING CALL */}
             {(isInCall || selectedPeer) && (
               <section style={styles.videoSection}>
                 <h2>🎬 Video Call</h2>
+
                 <div style={styles.videoContainer}>
+                  {/* LOCAL VIDEO */}
                   <div style={styles.videoBox}>
                     <label style={styles.videoLabel}>Your Video</label>
                     <video
@@ -265,6 +354,8 @@ export default function Home() {
                       muted
                     />
                   </div>
+
+                  {/* REMOTE VIDEO */}
                   <div style={styles.videoBox}>
                     <label style={styles.videoLabel}>
                       {hasRemoteStream ? `${callPeerName}'s Video` : 'Waiting for remote...'}
@@ -277,6 +368,8 @@ export default function Home() {
                     />
                   </div>
                 </div>
+
+                {/* CALL CONTROLS */}
                 <div style={styles.callControls}>
                   {isInCall && (
                     <button
@@ -287,7 +380,9 @@ export default function Home() {
                     </button>
                   )}
                   {!isInCall && selectedPeer && (
-                    <p style={styles.hint}>⏳ Connecting to {selectedPeer.username}...</p>
+                    <p style={styles.hint}>
+                      ⏳ Connecting to {selectedPeer.username}...
+                    </p>
                   )}
                 </div>
               </section>
@@ -295,21 +390,47 @@ export default function Home() {
           </>
         )}
 
+        {/* FOOTER - INFO */}
         <footer style={styles.footer}>
-          <h3>📚 How it works:</h3>
-          <ol style={styles.steps}>
-            <li>Enter your name and register</li>
-            <li>Wait for other peers to connect</li>
-            <li>Click "Call" to request connection</li>
-            <li>Other peer accepts the call</li>
-            <li>Video/audio stream P2P!</li>
-            <li>Click "End Call" to disconnect</li>
-          </ol>
+          <div style={styles.footerContent}>
+            <h3>📚 How it works:</h3>
+            <ol style={styles.steps}>
+              <li>Enter your name and register</li>
+              <li>Wait for other peers to connect</li>
+              <li>Click "Call" to request a connection</li>
+              <li>Other peer accepts the call</li>
+              <li>Video and audio stream P2P directly!</li>
+              <li>Click "End Call" to disconnect</li>
+            </ol>
+
+            <h3>💡 Learn More:</h3>
+            <ul style={styles.learnMore}>
+              <li>
+                <strong>WebSocket:</strong> Two-way communication channel (Socket.io)
+              </li>
+              <li>
+                <strong>WebRTC:</strong> Peer-to-peer audio/video (not through server)
+              </li>
+              <li>
+                <strong>SDP Offer/Answer:</strong> Connection negotiation protocol
+              </li>
+              <li>
+                <strong>ICE Candidates:</strong> Network addresses for finding peers
+              </li>
+              <li>
+                <strong>STUN/TURN:</strong> Servers helping peers behind firewalls
+              </li>
+            </ul>
+          </div>
         </footer>
       </main>
     </>
   );
 }
+
+// ============================================================================
+// STYLES - Simple inline CSS
+// ============================================================================
 
 const styles = {
   container: {
@@ -320,6 +441,7 @@ const styles = {
     backgroundColor: '#f5f5f5',
     minHeight: '100vh'
   },
+
   header: {
     textAlign: 'center',
     marginBottom: '40px',
@@ -328,10 +450,13 @@ const styles = {
     padding: '30px',
     borderRadius: '8px'
   },
+
   subtitle: {
     fontSize: '16px',
-    marginTop: '10px'
+    marginTop: '10px',
+    opacity: 0.9
   },
+
   status: {
     padding: '12px',
     marginBottom: '20px',
@@ -341,6 +466,7 @@ const styles = {
     textAlign: 'center',
     fontWeight: 'bold'
   },
+
   error: {
     padding: '12px',
     marginBottom: '20px',
@@ -349,6 +475,7 @@ const styles = {
     borderRadius: '4px',
     color: '#c62828'
   },
+
   section: {
     backgroundColor: 'white',
     padding: '20px',
@@ -356,11 +483,13 @@ const styles = {
     borderRadius: '8px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
+
   form: {
     display: 'flex',
     gap: '10px',
     marginBottom: '15px'
   },
+
   input: {
     flex: 1,
     padding: '10px',
@@ -368,6 +497,7 @@ const styles = {
     borderRadius: '4px',
     fontSize: '16px'
   },
+
   button: {
     padding: '10px 20px',
     backgroundColor: '#2196F3',
@@ -376,18 +506,22 @@ const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
     fontWeight: 'bold',
-    fontSize: '14px'
+    fontSize: '14px',
+    transition: 'opacity 0.2s'
   },
+
   hint: {
     fontSize: '14px',
     color: '#666',
     fontStyle: 'italic'
   },
+
   peerList: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
     gap: '10px'
   },
+
   peerCard: {
     padding: '15px',
     backgroundColor: '#f9f9f9',
@@ -397,6 +531,7 @@ const styles = {
     justifyContent: 'space-between',
     alignItems: 'center'
   },
+
   peerButton: {
     padding: '8px 12px',
     backgroundColor: '#2196F3',
@@ -406,6 +541,7 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px'
   },
+
   incomingCallBox: {
     backgroundColor: '#fff3e0',
     border: '2px solid #ff9800',
@@ -414,34 +550,41 @@ const styles = {
     marginBottom: '20px',
     textAlign: 'center'
   },
+
   incomingCallTitle: {
     fontSize: '20px',
     marginBottom: '15px',
     color: '#e65100'
   },
+
   incomingCallButtons: {
     display: 'flex',
     gap: '10px',
     justifyContent: 'center'
   },
+
   videoSection: {
     backgroundColor: 'white',
     padding: '20px',
     marginBottom: '20px',
-    borderRadius: '8px'
+    borderRadius: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
+
   videoContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
     gap: '15px',
     marginBottom: '20px'
   },
+
   videoBox: {
     backgroundColor: '#000',
     borderRadius: '4px',
     overflow: 'hidden',
     position: 'relative'
   },
+
   videoLabel: {
     position: 'absolute',
     top: '10px',
@@ -453,25 +596,43 @@ const styles = {
     fontSize: '12px',
     zIndex: 1
   },
+
   video: {
     width: '100%',
     height: '300px',
     objectFit: 'cover'
   },
+
   callControls: {
     display: 'flex',
     justifyContent: 'center',
     gap: '10px'
   },
+
   footer: {
     backgroundColor: 'white',
     padding: '20px',
     borderRadius: '8px',
-    marginTop: '30px'
+    marginTop: '30px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
   },
+
+  footerContent: {
+    fontSize: '14px',
+    lineHeight: '1.6'
+  },
+
   steps: {
     backgroundColor: '#f9f9f9',
     padding: '15px 30px',
-    borderRadius: '4px'
+    borderRadius: '4px',
+    marginBottom: '20px'
+  },
+
+  learnMore: {
+    backgroundColor: '#f9f9f9',
+    padding: '15px 30px',
+    borderRadius: '4px',
+    marginBottom: '0'
   }
 };

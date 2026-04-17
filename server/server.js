@@ -36,7 +36,7 @@
 
 import express from 'express';
 import http from 'http';
-import socketIo from 'socket.io';
+import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { roomManager } from './roomManager.js';
@@ -86,10 +86,26 @@ const server = http.createServer(app);
  * You'd change CORS_ORIGIN to your actual domain:
  * cors: { origin: "https://www.videochat.com", credentials: true }
  */
-const io = socketIo(server, {
+const io = new SocketIOServer(server, {
   cors: {
     // ✅ ALLOW CONNECTIONS FROM:
-    origin: CORS_ORIGIN,
+    // For development: allow localhost AND local network IPs (192.168.x.x, 10.x.x.x)
+    // For production: use specific domain from CORS_ORIGIN env var
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+      } else if (
+        origin.startsWith('http://localhost:') ||
+        origin.startsWith('http://127.0.0.1:') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.') ||
+        origin.startsWith('http://172.')
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     // CREDENTIALS = true means we allow cookies/auth headers
     // (not used here, but good practice)
     credentials: true
