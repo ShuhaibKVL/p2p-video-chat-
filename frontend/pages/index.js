@@ -32,6 +32,7 @@ export default function Home() {
   const [selectedPeer, setSelectedPeer] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
   const [isInCall, setIsInCall] = useState(false);
+  const [callingPeerId, setCallingPeerId] = useState(null);  // Track which peer is being called
   const [callPeerName, setCallPeerName] = useState('');
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
   const [error, setError] = useState('');
@@ -46,6 +47,7 @@ export default function Home() {
     setAvailablePeers([...(callState.availablePeers || [])]);
     setIncomingCall(callState.incomingCallData);
     setIsInCall(callState.isInCall);
+    setCallingPeerId(callState.callingPeerId);  // Update calling peer tracking
     setCallPeerName(callState.currentPeerUsername || '');
     setHasRemoteStream(!!callState.peerConnection?.remoteDescription);
   }
@@ -213,16 +215,24 @@ export default function Home() {
                   {availablePeers.map((peer) => (
                     <div key={peer.socketId} style={styles.peerCard}>
                       <span>{peer.username}</span>
-                      <button
-                        onClick={() => handleCall(peer)}
-                        disabled={isInCall}
-                        style={{
-                          ...styles.peerButton,
-                          opacity: isInCall ? 0.5 : 1
-                        }}
-                      >
-                        📞 Call
-                      </button>
+                      {callingPeerId === peer.socketId ? (
+                        // Show "Calling..." status if this peer is being called
+                        <span style={{ ...styles.peerButton, background: '#ff9800', color: 'white', cursor: 'default' }}>
+                          📞 Calling...
+                        </span>
+                      ) : (
+                        // Show Call button if not calling this peer
+                        <button
+                          onClick={() => handleCall(peer)}
+                          disabled={isInCall}
+                          style={{
+                            ...styles.peerButton,
+                            opacity: isInCall ? 0.5 : 1
+                          }}
+                        >
+                          📞 Call
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -404,7 +414,8 @@ const styles = {
     border: 'none',
     borderRadius: '4px',
     cursor: 'pointer',
-    fontSize: '12px'
+    fontSize: '12px',
+    display: 'inline-block'
   },
   incomingCallBox: {
     backgroundColor: '#fff3e0',

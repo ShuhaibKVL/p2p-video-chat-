@@ -115,9 +115,25 @@ export class LocalMediaManager {
     } catch (error) {
       // Handle different types of errors
       if (error.name === 'NotAllowedError') {
-        // User clicked "Deny"
-        console.error('❌ Camera/microphone access denied by user');
-        throw new Error('You must grant camera and microphone permissions');
+        // User clicked "Deny" or browser blocked it (e.g., non-HTTPS IP access)
+        console.error('❌ Camera/microphone access denied');
+        
+        // Check if accessing via IP address (insecure origin)
+        const isNonSecureOrigin = !location.hostname.includes('localhost') && 
+                                  !location.hostname.includes('127.0.0.1') && 
+                                  location.protocol !== 'https:';
+        
+        if (isNonSecureOrigin) {
+          throw new Error(
+            'Browser blocked camera access on IP address.\n\n' +
+            'SOLUTION:\n' +
+            '1. Use localhost on this machine: http://localhost:3002\n' +
+            '2. OR use HTTPS with a certificate\n\n' +
+            'You can use the IP address on OTHER machines that connect to this one.'
+          );
+        } else {
+          throw new Error('You must grant camera and microphone permissions');
+        }
       } else if (error.name === 'NotFoundError') {
         // No camera/microphone found on device
         console.error('❌ No camera or microphone found');

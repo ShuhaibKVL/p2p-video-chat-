@@ -104,6 +104,7 @@ export const callState = {
   // Call state
   isInCall: false,
   incomingCallData: null,
+  callingPeerId: null,  // Track which peer is being called (for UI status)
   availablePeers: [],
 };
 
@@ -214,13 +215,20 @@ export async function handleRequestCall(targetUsername, targetSocketId) {
     // Set peer info
     callState.currentPeerId = targetSocketId;
     callState.currentPeerUsername = targetUsername;
+    callState.callingPeerId = targetSocketId;  // Track that we're calling this peer
 
     // Start getting local media
     await startLocalMedia();
 
     console.log(`📞 Calling ${targetUsername}...`);
+
+    // Update UI
+    if (window.updateUI) {
+      window.updateUI();
+    }
   } catch (error) {
     console.error('Error requesting call:', error);
+    callState.callingPeerId = null;  // Clear if error
     alert(`Error: ${error.message}`);
   }
 }
@@ -296,6 +304,9 @@ export function handleEndCall() {
   if (callState.currentPeerId) {
     endCall(callState.currentPeerId);
   }
+
+  // Clear calling state
+  callState.callingPeerId = null;
 
   // Clean up
   cleanup();
@@ -680,6 +691,7 @@ export function cleanup() {
   callState.currentPeerId = null;
   callState.currentPeerUsername = null;
   callState.incomingCallData = null;
+  callState.callingPeerId = null;  // Clear calling status
 
   // Close peer connection
   if (callState.peerConnection) {

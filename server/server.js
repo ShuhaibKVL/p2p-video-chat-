@@ -88,24 +88,8 @@ const server = http.createServer(app);
  */
 const io = new SocketIOServer(server, {
   cors: {
-    // ✅ ALLOW CONNECTIONS FROM:
-    // For development: allow localhost AND local network IPs (192.168.x.x, 10.x.x.x)
-    // For production: use specific domain from CORS_ORIGIN env var
-    origin: (origin, callback) => {
-      if (!origin) {
-        callback(null, true);
-      } else if (
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('http://127.0.0.1:') ||
-        origin.startsWith('http://192.168.') ||
-        origin.startsWith('http://10.') ||
-        origin.startsWith('http://172.')
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
+    // Development: allow any origin so local network clients can connect
+    origin: true,
     // CREDENTIALS = true means we allow cookies/auth headers
     // (not used here, but good practice)
     credentials: true
