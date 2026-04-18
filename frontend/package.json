@@ -4,6 +4,7 @@
   "description": "Next.js frontend for peer-to-peer video/audio chat with WebRTC",
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3002",
+    "dev:https": "node ../server-https.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

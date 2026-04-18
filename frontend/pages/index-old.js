@@ -85,7 +85,7 @@ function Home() {
     const init = async () => {
       // Load call-flow module dynamically on client side
       const { initializeApp } = await loadCallFlow();
-      
+
       // Initialize the app
       initializeApp();
 
@@ -93,13 +93,13 @@ function Home() {
       window.updateUI = updateUI;
       window.displayRemoteStream = displayRemoteStream;
 
-    setStatus('Ready to register');
+      setStatus('Ready to register');
 
-    // Cleanup on unmount
-    return () => {
-      cleanup();
-    };
-  }, []);
+      // Cleanup on unmount
+      return () => {
+        cleanup();
+      };
+    }, []);
 
   // =========================================================================
   // CALLBACK FUNCTIONS - Called by call-flow.js
@@ -234,8 +234,10 @@ function Home() {
       <main style={styles.container}>
         {/* HEADER */}
         <header style={styles.header}>
+          {/* 
           <h1>🎥 P2P Video Chat</h1>
           <p style={styles.subtitle}>WebRTC Peer-to-Peer Communication</p>
+          */}
         </header>
 
         {/* ERROR DISPLAY */}

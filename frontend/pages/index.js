@@ -168,8 +168,8 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>P2P Video Chat - WebRTC + Socket.io</title>
-        <meta name="description" content="Peer-to-peer video chat" />
+        {/* <title>P2P Video Chat - WebRTC + Socket.io</title>
+        <meta name="description" content="Peer-to-peer video chat" /> */}
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
