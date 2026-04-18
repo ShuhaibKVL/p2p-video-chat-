@@ -36,6 +36,10 @@
 
 import express from 'express';
 import http from 'http';
+import https from 'https';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -59,11 +63,27 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // WHY: We need a basic HTTP server for Socket.io to attach to
 const app = express();
 
-// Create an HTTP server from Express
+// Create an HTTP or HTTPS server from Express
 // IMPORTANT FOR WEBSOCKETS:
-// WebSockets need an HTTP server to attach to. We can't use Express directly.
-// We wrap Express with the http module, then attach Socket.io to it.
-const server = http.createServer(app);
+// WebSockets need an HTTP/S server to attach to. We can't use Express directly.
+// We wrap Express with the http or https module, then attach Socket.io to it.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const certPath = path.resolve(__dirname, '..', 'cert.pem');
+const keyPath = path.resolve(__dirname, '..', 'key.pem');
+
+let server;
+if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+  console.log('🔐 SSL certificates found for signaling server. Using HTTPS/WSS.');
+  server = https.createServer({
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath)
+  }, app);
+} else {
+  console.warn('⚠️ SSL certificates not found for signaling server. Using HTTP only.');
+  server = http.createServer(app);
+}
+
 
 // ============================================================================
 // SOCKET.IO INITIALIZATION WITH CORS

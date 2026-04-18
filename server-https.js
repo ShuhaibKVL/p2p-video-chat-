@@ -8,7 +8,7 @@
  */
 
 const https = require('https');
-const fs = require('path');
+const fs = require('fs');
 const path = require('path');
 const { createServer } = require('http');
 
@@ -47,11 +47,12 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
   process.exit(1);
 }
 
-// Import Next.js
+// Import Next.js from the frontend folder
 const { parse } = require('url');
-const next = require('next');
+const nextPath = path.join(__dirname, 'frontend', 'node_modules', 'next');
+const next = require(nextPath);
 const dev = process.env.NODE_ENV !== 'production';
-const app = next({ dev });
+const app = next({ dev, dir: path.join(__dirname, 'frontend') });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
