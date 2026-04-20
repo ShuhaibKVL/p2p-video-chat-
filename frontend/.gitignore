@@ -10,3 +10,8 @@ yarn-error.log*
 .DS_Store
 .env.local
 .env
+
+# Test results and reports
+playwright-report/
+test-results/
+playwright/.cache/
