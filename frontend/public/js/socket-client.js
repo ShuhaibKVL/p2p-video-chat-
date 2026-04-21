@@ -33,375 +33,375 @@ let socket = null;
  * This allows easier testing and lets pages choose when to connect
  */
 export function initializeSocket() {
-  // Check if Socket.io client is available
-  // (It's loaded from a <script> tag in the HTML page)
-  if (!window.io) {
-    console.error('❌ Socket.io client not loaded. Add <script src="...socket.io.js"></script> to HTML');
-    return null;
-  }
-
-  // Import the Socket.io client library
-  // NEXT_PUBLIC_SOCKET_URL = http://localhost:3001 (from .env.local)
-  // "NEXT_PUBLIC" means it's available in the browser (safe to expose)
-  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
-
-  console.log(`🔗 Connecting to WebSocket server at: ${socketUrl}`);
-
-  /**
-   * CREATE THE SOCKET CONNECTION
-   * 
-   * io(url, options) - Connect to the server
-   */
-  socket = window.io(socketUrl, {
-    // RECONNECTION CONFIG
-    // If the connection drops, should we try to reconnect?
-    reconnection: true,
-    
-    // How many milliseconds to wait before trying to reconnect
-    // Starts at this value and increases over time (backoff)
-    // First attempt: 1 second
-    // Second attempt: 2 seconds
-    // Third attempt: 4 seconds
-    // (exponential backoff prevents hammering the server if it's down)
-    reconnectionDelay: 1000,
-    
-    // Maximum delay between reconnection attempts (won't exceed this)
-    // e.g., if backoff would wait 10 seconds, cap it at 5 seconds
-    reconnectionDelayMax: 5000,
-    
-    // Total number of reconnection attempts before giving up
-    // After 10 failed attempts, stop trying (user should refresh page)
-    reconnectionAttempts: 10,
-
-    // TRANSPORT PROTOCOLS
-    // Socket.io tries these in order:
-    // 1. websocket - the native WebSocket protocol (fast, modern)
-    // 2. polling - fallback if WebSocket not available (slower)
-    transports: ['websocket', 'polling'],
-
-    // AUTO-CONNECT
-    // If false, you must call socket.connect() manually
-    // We leave it true so it connects immediately on init
-    autoConnect: true,
-
-    // DEBUGGING
-    // Set to true to see verbose Socket.io logs in console
-    // Useful for troubleshooting connection issues
-    debug: false // Change to true if debugging connection problems
-  });
-
-  // =========================================================================
-  // SOCKET EVENT LISTENERS - Listen for messages FROM server
-  // =========================================================================
-
-  /**
-   * "connect" EVENT
-   * 
-   * TRIGGERED: When successfully connected to the server
-   * 
-   * WHAT HAPPENS:
-   * - socket.id is now available (unique ID for this connection)
-   * - We can start sending messages to the server
-   */
-  socket.on('connect', () => {
-    console.log(`✅ Connected to WebSocket server (Your ID: ${socket.id})`);
-  });
-
-  /**
-   * "disconnect" EVENT
-   * 
-   * TRIGGERED: When connection is lost (internet cut, server crashed, etc.)
-   * 
-   * WHAT HAPPENS:
-   * - Socket.io will automatically try to reconnect
-   * - We should notify the user "Connection lost"
-   * - Any active call should be treated as ended
-   */
-  socket.on('disconnect', (reason) => {
-    console.log(`❌ Disconnected from server: ${reason}`);
-    // Notify the UI that we're disconnected
-    if (window.onSocketDisconnected) {
-      window.onSocketDisconnected(reason);
+    // Check if Socket.io client is available
+    // (It's loaded from a <script> tag in the HTML page)
+    if (!window.io) {
+        console.error('❌ Socket.io client not loaded. Add <script src="...socket.io.js"></script> to HTML');
+        return null;
     }
-  });
 
-  /**
-   * "connect_error" EVENT
-   * 
-   * TRIGGERED: When there's an error connecting to the server
-   * 
-   * EXAMPLES:
-   * - Server not running
-   * - CORS blocked the connection
-   * - Network unreachable
-   */
-  socket.on('connect_error', (error) => {
-    console.error(`⚠️  Connection error:`, error);
-    if (window.onSocketError) {
-      window.onSocketError(error);
-    }
-  });
+    // Import the Socket.io client library
+    // NEXT_PUBLIC_SOCKET_URL = http://localhost:3001 (from .env.local)
+    // "NEXT_PUBLIC" means it's available in the browser (safe to expose)
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
 
-  /**
-   * "error" EVENT
-   * 
-   * TRIGGERED: When server sends an error message
-   */
-  socket.on('error', (error) => {
-    console.error(`⚠️  Server error:`, error);
-    if (window.onSocketError) {
-      window.onSocketError(error);
-    }
-  });
+    console.log(`🔗 Connecting to WebSocket server at: ${socketUrl}`);
 
-  /**
-   * "peer-registered" EVENT
-   * 
-   * RECEIVED FROM: Server (response to our register-peer emit)
-   * 
-   * DATA:
-   * {
-   *   success: true,
-   *   yourSocketId: "abc123",
-   *   availablePeers: [
-   *     { socketId: "xyz789", username: "Bob" },
-   *     { socketId: "def456", username: "Charlie" }
-   *   ]
-   * }
-   * 
-   * WHAT IT MEANS:
-   * "You are now registered as [username]. Here are peers you can call:"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Show success message
-   * - Populate a list of available peers
-   * - Enable the "Call" button
-   */
-  socket.on('peer-registered', (data) => {
-    console.log(`✅ Registered successfully:`, data);
-    if (window.onPeerRegistered) {
-      window.onPeerRegistered(data);
-    }
-  });
+    /**
+     * CREATE THE SOCKET CONNECTION
+     * 
+     * io(url, options) - Connect to the server
+     */
+    socket = window.io(socketUrl, {
+        // RECONNECTION CONFIG
+        // If the connection drops, should we try to reconnect?
+        reconnection: true,
 
-  /**
-   * "peer-joined" EVENT
-   * 
-   * RECEIVED FROM: Server (broadcast when a new peer joins)
-   * 
-   * TRIGGERED: When someone else joins the video chat
-   * 
-   * DATA:
-   * { socketId: "new-peer-id", username: "NewPerson" }
-   * 
-   * WHAT IT MEANS:
-   * "Another peer just joined the room"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Add this peer to the available list
-   * - Show "NewPerson is online" message
-   */
-  socket.on('peer-joined', (data) => {
-    console.log(`👤 New peer joined: ${data.username}`);
-    if (window.onPeerJoined) {
-      window.onPeerJoined(data);
-    }
-  });
+        // How many milliseconds to wait before trying to reconnect
+        // Starts at this value and increases over time (backoff)
+        // First attempt: 1 second
+        // Second attempt: 2 seconds
+        // Third attempt: 4 seconds
+        // (exponential backoff prevents hammering the server if it's down)
+        reconnectionDelay: 1000,
 
-  /**
-   * "peer-left" EVENT
-   * 
-   * RECEIVED FROM: Server (broadcast when a peer disconnects)
-   * 
-   * DATA:
-   * { socketId: "peer-id", username: "LeavingPerson" }
-   * 
-   * WHAT IT MEANS:
-   * "A peer just went offline"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Remove from available peers list
-   * - Show "LeavingPerson is offline" message
-   * - If we're calling them, end the call
-   */
-  socket.on('peer-left', (data) => {
-    console.log(`👋 Peer left: ${data.username}`);
-    if (window.onPeerLeft) {
-      window.onPeerLeft(data);
-    }
-  });
+        // Maximum delay between reconnection attempts (won't exceed this)
+        // e.g., if backoff would wait 10 seconds, cap it at 5 seconds
+        reconnectionDelayMax: 5000,
 
-  /**
-   * "incoming-call" EVENT
-   * 
-   * RECEIVED FROM: Server (when another peer requests a call with us)
-   * 
-   * DATA:
-   * { fromSocketId: "alice-id", fromUsername: "Alice" }
-   * 
-   * WHAT IT MEANS:
-   * "Alice wants to call you!"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Show popup: "Alice wants to call. Accept? [Yes] [No]"
-   * - If user clicks "Yes" → emit call-accepted event
-   * - If user clicks "No" → emit call-declined event
-   */
-  socket.on('incoming-call', (data) => {
-    console.log(`📞 Incoming call from: ${data.fromUsername}`);
-    if (window.onIncomingCall) {
-      window.onIncomingCall(data);
-    }
-  });
+        // Total number of reconnection attempts before giving up
+        // After 10 failed attempts, stop trying (user should refresh page)
+        reconnectionAttempts: 10,
 
-  /**
-   * "call-rejected" EVENT
-   * 
-   * RECEIVED FROM: Server (when the peer we called rejected us)
-   * 
-   * DATA:
-   * { rejectedBy: "Bob", message: "Bob declined your call" }
-   * 
-   * WHAT IT MEANS:
-   * "The person we tried to call said no"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Show message: "Call rejected by Bob"
-   * - Reset UI to "ready to call" state
-   * - Clear any partial WebRTC connection
-   */
-  socket.on('call-rejected', (data) => {
-    console.log(`❌ Call rejected: ${data.message}`);
-    if (window.onCallRejected) {
-      window.onCallRejected(data);
-    }
-  });
+        // TRANSPORT PROTOCOLS
+        // Socket.io tries these in order:
+        // 1. websocket - the native WebSocket protocol (fast, modern)
+        // 2. polling - fallback if WebSocket not available (slower)
+        transports: ['websocket', 'polling'],
 
-  /**
-   * "offer" EVENT
-   * 
-   * RECEIVED FROM: Server (relaying WebRTC offer from calling peer)
-   * 
-   * DATA:
-   * {
-   *   offer: { type: "offer", sdp: "..." },
-   *   fromSocketId: "alice-id",
-   *   fromUsername: "Alice"
-   * }
-   * 
-   * WHAT IT MEANS:
-   * "Alice has created a WebRTC offer. Here are her connection details."
-   * 
-   * TECHNICAL DETAIL:
-   * offer = SDP (Session Description Protocol)
-   * It contains:
-   * - What video codec she wants to use
-   * - What audio codec she wants
-   * - Her network candidates (addresses she can be reached at)
-   * - Her fingerprint (security verification)
-   * 
-   * WHAT THE WEBRTC CODE SHOULD DO:
-   * - Create RTCPeerConnection
-   * - Set offer as remoteDescription
-   * - Create answer (our response)
-   * - Send answer back via emit('answer', ...)
-   */
-  socket.on('offer', (data) => {
-    console.log(`📤 Received offer from ${data.fromUsername}`);
-    if (window.onOffer) {
-      window.onOffer(data);
-    }
-  });
+        // AUTO-CONNECT
+        // If false, you must call socket.connect() manually
+        // We leave it true so it connects immediately on init
+        autoConnect: true,
 
-  /**
-   * "answer" EVENT
-   * 
-   * RECEIVED FROM: Server (relaying WebRTC answer from called peer)
-   * 
-   * DATA:
-   * {
-   *   answer: { type: "answer", sdp: "..." },
-   *   fromSocketId: "bob-id",
-   *   fromUsername: "Bob"
-   * }
-   * 
-   * WHAT IT MEANS:
-   * "Bob got your offer and is responding with his connection details"
-   * 
-   * WHAT THE WEBRTC CODE SHOULD DO:
-   * - Set answer as remoteDescription on our RTCPeerConnection
-   * - Now both have each other's connection info
-   * - Next step: exchange ICE candidates
-   */
-  socket.on('answer', (data) => {
-    console.log(`📥 Received answer from ${data.fromUsername}`);
-    if (window.onAnswer) {
-      window.onAnswer(data);
-    }
-  });
+        // DEBUGGING
+        // Set to true to see verbose Socket.io logs in console
+        // Useful for troubleshooting connection issues
+        debug: true // Change to true if debugging connection problems
+    });
 
-  /**
-   * "ice-candidate" EVENT
-   * 
-   * RECEIVED FROM: Server (relaying ICE candidate from peer)
-   * 
-   * DATA:
-   * { candidate: { candidate: "...", ...}, fromSocketId: "bob-id" }
-   * 
-   * WHAT IS ICE?
-   * ICE = Interactive Connectivity Establishment
-   * 
-   * SCENARIO:
-   * Alice is behind her home WiFi router
-   * Bob is behind his router
-   * They don't know each other's true IP addresses!
-   * 
-   * SOLUTION:
-   * Browser detects all possible addresses:
-   * - Local IP (192.168.1.5 on Alice's network)
-   * - Public IP (Alice's ISP's external IP)
-   * - Relay server IP (fallback if P2P fails)
-   * 
-   * Each is an "ICE candidate"
-   * Bob tries each one until one works (he can reach Alice)
-   * 
-   * WHAT THE WEBRTC CODE SHOULD DO:
-   * - Call peerConnection.addIceCandidate(candidateObj)
-   * - This tells our RTCPeerConnection: "Try to reach Bob via this address"
-   */
-  socket.on('ice-candidate', (data) => {
-    // Don't log every candidate (too verbose)
-    if (window.onIceCandidate) {
-      window.onIceCandidate(data);
-    }
-  });
+    // =========================================================================
+    // SOCKET EVENT LISTENERS - Listen for messages FROM server
+    // =========================================================================
 
-  /**
-   * "call-ended" EVENT
-   * 
-   * RECEIVED FROM: Server (peer ended the call)
-   * 
-   * DATA:
-   * { fromUsername: "Alice" }
-   * 
-   * WHAT IT MEANS:
-   * "Alice clicked 'End Call' button"
-   * 
-   * WHAT THE UI SHOULD DO:
-   * - Stop all video/audio streams
-   * - Close WebRTC connection
-   * - Clear video elements
-   * - Show "Call ended" message
-   * - Reset to "ready for new call" state
-   */
-  socket.on('call-ended', (data) => {
-    console.log(`🛑 Call ended by ${data.fromUsername}`);
-    if (window.onCallEnded) {
-      window.onCallEnded(data);
-    }
-  });
+    /**
+     * "connect" EVENT
+     * 
+     * TRIGGERED: When successfully connected to the server
+     * 
+     * WHAT HAPPENS:
+     * - socket.id is now available (unique ID for this connection)
+     * - We can start sending messages to the server
+     */
+    socket.on('connect', () => {
+        console.log(`✅ Connected to WebSocket server (Your ID: ${socket.id})`);
+    });
 
-  return socket;
+    /**
+     * "disconnect" EVENT
+     * 
+     * TRIGGERED: When connection is lost (internet cut, server crashed, etc.)
+     * 
+     * WHAT HAPPENS:
+     * - Socket.io will automatically try to reconnect
+     * - We should notify the user "Connection lost"
+     * - Any active call should be treated as ended
+     */
+    socket.on('disconnect', (reason) => {
+        console.log(`❌ Disconnected from server: ${reason}`);
+        // Notify the UI that we're disconnected
+        if (window.onSocketDisconnected) {
+            window.onSocketDisconnected(reason);
+        }
+    });
+
+    /**
+     * "connect_error" EVENT
+     * 
+     * TRIGGERED: When there's an error connecting to the server
+     * 
+     * EXAMPLES:
+     * - Server not running
+     * - CORS blocked the connection
+     * - Network unreachable
+     */
+    socket.on('connect_error', (error) => {
+        console.error(`⚠️  Connection error:`, error);
+        if (window.onSocketError) {
+            window.onSocketError(error);
+        }
+    });
+
+    /**
+     * "error" EVENT
+     * 
+     * TRIGGERED: When server sends an error message
+     */
+    socket.on('error', (error) => {
+        console.error(`⚠️  Server error:`, error);
+        if (window.onSocketError) {
+            window.onSocketError(error);
+        }
+    });
+
+    /**
+     * "peer-registered" EVENT
+     * 
+     * RECEIVED FROM: Server (response to our register-peer emit)
+     * 
+     * DATA:
+     * {
+     *   success: true,
+     *   yourSocketId: "abc123",
+     *   availablePeers: [
+     *     { socketId: "xyz789", username: "Bob" },
+     *     { socketId: "def456", username: "Charlie" }
+     *   ]
+     * }
+     * 
+     * WHAT IT MEANS:
+     * "You are now registered as [username]. Here are peers you can call:"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Show success message
+     * - Populate a list of available peers
+     * - Enable the "Call" button
+     */
+    socket.on('peer-registered', (data) => {
+        console.log(`✅ Registered successfully:`, data);
+        if (window.onPeerRegistered) {
+            window.onPeerRegistered(data);
+        }
+    });
+
+    /**
+     * "peer-joined" EVENT
+     * 
+     * RECEIVED FROM: Server (broadcast when a new peer joins)
+     * 
+     * TRIGGERED: When someone else joins the video chat
+     * 
+     * DATA:
+     * { socketId: "new-peer-id", username: "NewPerson" }
+     * 
+     * WHAT IT MEANS:
+     * "Another peer just joined the room"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Add this peer to the available list
+     * - Show "NewPerson is online" message
+     */
+    socket.on('peer-joined', (data) => {
+        console.log(`👤 New peer joined: ${data.username}`);
+        if (window.onPeerJoined) {
+            window.onPeerJoined(data);
+        }
+    });
+
+    /**
+     * "peer-left" EVENT
+     * 
+     * RECEIVED FROM: Server (broadcast when a peer disconnects)
+     * 
+     * DATA:
+     * { socketId: "peer-id", username: "LeavingPerson" }
+     * 
+     * WHAT IT MEANS:
+     * "A peer just went offline"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Remove from available peers list
+     * - Show "LeavingPerson is offline" message
+     * - If we're calling them, end the call
+     */
+    socket.on('peer-left', (data) => {
+        console.log(`👋 Peer left: ${data.username}`);
+        if (window.onPeerLeft) {
+            window.onPeerLeft(data);
+        }
+    });
+
+    /**
+     * "incoming-call" EVENT
+     * 
+     * RECEIVED FROM: Server (when another peer requests a call with us)
+     * 
+     * DATA:
+     * { fromSocketId: "alice-id", fromUsername: "Alice" }
+     * 
+     * WHAT IT MEANS:
+     * "Alice wants to call you!"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Show popup: "Alice wants to call. Accept? [Yes] [No]"
+     * - If user clicks "Yes" → emit call-accepted event
+     * - If user clicks "No" → emit call-declined event
+     */
+    socket.on('incoming-call', (data) => {
+        console.log(`📞 Incoming call from: ${data.fromUsername}`);
+        if (window.onIncomingCall) {
+            window.onIncomingCall(data);
+        }
+    });
+
+    /**
+     * "call-rejected" EVENT
+     * 
+     * RECEIVED FROM: Server (when the peer we called rejected us)
+     * 
+     * DATA:
+     * { rejectedBy: "Bob", message: "Bob declined your call" }
+     * 
+     * WHAT IT MEANS:
+     * "The person we tried to call said no"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Show message: "Call rejected by Bob"
+     * - Reset UI to "ready to call" state
+     * - Clear any partial WebRTC connection
+     */
+    socket.on('call-rejected', (data) => {
+        console.log(`❌ Call rejected: ${data.message}`);
+        if (window.onCallRejected) {
+            window.onCallRejected(data);
+        }
+    });
+
+    /**
+     * "offer" EVENT
+     * 
+     * RECEIVED FROM: Server (relaying WebRTC offer from calling peer)
+     * 
+     * DATA:
+     * {
+     *   offer: { type: "offer", sdp: "..." },
+     *   fromSocketId: "alice-id",
+     *   fromUsername: "Alice"
+     * }
+     * 
+     * WHAT IT MEANS:
+     * "Alice has created a WebRTC offer. Here are her connection details."
+     * 
+     * TECHNICAL DETAIL:
+     * offer = SDP (Session Description Protocol)
+     * It contains:
+     * - What video codec she wants to use
+     * - What audio codec she wants
+     * - Her network candidates (addresses she can be reached at)
+     * - Her fingerprint (security verification)
+     * 
+     * WHAT THE WEBRTC CODE SHOULD DO:
+     * - Create RTCPeerConnection
+     * - Set offer as remoteDescription
+     * - Create answer (our response)
+     * - Send answer back via emit('answer', ...)
+     */
+    socket.on('offer', (data) => {
+        console.log(`📤 Received offer from ${data.fromUsername}`);
+        if (window.onOffer) {
+            window.onOffer(data);
+        }
+    });
+
+    /**
+     * "answer" EVENT
+     * 
+     * RECEIVED FROM: Server (relaying WebRTC answer from called peer)
+     * 
+     * DATA:
+     * {
+     *   answer: { type: "answer", sdp: "..." },
+     *   fromSocketId: "bob-id",
+     *   fromUsername: "Bob"
+     * }
+     * 
+     * WHAT IT MEANS:
+     * "Bob got your offer and is responding with his connection details"
+     * 
+     * WHAT THE WEBRTC CODE SHOULD DO:
+     * - Set answer as remoteDescription on our RTCPeerConnection
+     * - Now both have each other's connection info
+     * - Next step: exchange ICE candidates
+     */
+    socket.on('answer', (data) => {
+        console.log(`📥 Received answer from ${data.fromUsername}`);
+        if (window.onAnswer) {
+            window.onAnswer(data);
+        }
+    });
+
+    /**
+     * "ice-candidate" EVENT
+     * 
+     * RECEIVED FROM: Server (relaying ICE candidate from peer)
+     * 
+     * DATA:
+     * { candidate: { candidate: "...", ...}, fromSocketId: "bob-id" }
+     * 
+     * WHAT IS ICE?
+     * ICE = Interactive Connectivity Establishment
+     * 
+     * SCENARIO:
+     * Alice is behind her home WiFi router
+     * Bob is behind his router
+     * They don't know each other's true IP addresses!
+     * 
+     * SOLUTION:
+     * Browser detects all possible addresses:
+     * - Local IP (192.168.1.5 on Alice's network)
+     * - Public IP (Alice's ISP's external IP)
+     * - Relay server IP (fallback if P2P fails)
+     * 
+     * Each is an "ICE candidate"
+     * Bob tries each one until one works (he can reach Alice)
+     * 
+     * WHAT THE WEBRTC CODE SHOULD DO:
+     * - Call peerConnection.addIceCandidate(candidateObj)
+     * - This tells our RTCPeerConnection: "Try to reach Bob via this address"
+     */
+    socket.on('ice-candidate', (data) => {
+        // Don't log every candidate (too verbose)
+        if (window.onIceCandidate) {
+            window.onIceCandidate(data);
+        }
+    });
+
+    /**
+     * "call-ended" EVENT
+     * 
+     * RECEIVED FROM: Server (peer ended the call)
+     * 
+     * DATA:
+     * { fromUsername: "Alice" }
+     * 
+     * WHAT IT MEANS:
+     * "Alice clicked 'End Call' button"
+     * 
+     * WHAT THE UI SHOULD DO:
+     * - Stop all video/audio streams
+     * - Close WebRTC connection
+     * - Clear video elements
+     * - Show "Call ended" message
+     * - Reset to "ready for new call" state
+     */
+    socket.on('call-ended', (data) => {
+        console.log(`🛑 Call ended by ${data.fromUsername}`);
+        if (window.onCallEnded) {
+            window.onCallEnded(data);
+        }
+    });
+
+    return socket;
 }
 
 // ============================================================================
@@ -416,13 +416,13 @@ export function initializeSocket() {
  * @param {string} username - Display name (e.g., "Alice")
  */
 export function registerPeer(username) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot register peer.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot register peer.');
+        return;
+    }
 
-  console.log(`Registering as: ${username}`);
-  socket.emit('register-peer', { username });
+    console.log(`Registering as: ${username}`);
+    socket.emit('register-peer', { username });
 }
 
 /**
@@ -437,13 +437,13 @@ export function registerPeer(username) {
  * - Target peer can accept or decline
  */
 export function requestCall(targetUsername) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot request call.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot request call.');
+        return;
+    }
 
-  console.log(`Requesting call with: ${targetUsername}`);
-  socket.emit('request-call', { targetUsername });
+    console.log(`Requesting call with: ${targetUsername}`);
+    socket.emit('request-call', { targetUsername });
 }
 
 /**
@@ -458,13 +458,13 @@ export function requestCall(targetUsername) {
  * 2. Caller will then create WebRTC offer and send it
  */
 export function acceptCall(fromSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot accept call.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot accept call.');
+        return;
+    }
 
-  console.log(`Accepting call from: ${fromSocketId}`);
-  socket.emit('call-accepted', { fromSocketId });
+    console.log(`Accepting call from: ${fromSocketId}`);
+    socket.emit('call-accepted', { fromSocketId });
 }
 
 /**
@@ -475,13 +475,13 @@ export function acceptCall(fromSocketId) {
  * @param {string} targetSocketId - The socket ID of the caller
  */
 export function declineCall(targetSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot decline call.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot decline call.');
+        return;
+    }
 
-  console.log(`Declining call from: ${targetSocketId}`);
-  socket.emit('call-declined', { targetSocketId });
+    console.log(`Declining call from: ${targetSocketId}`);
+    socket.emit('call-declined', { targetSocketId });
 }
 
 /**
@@ -506,13 +506,13 @@ export function declineCall(targetSocketId) {
  * 4. We receive answer via "answer" event listener
  */
 export function sendOffer(offer, targetSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot send offer.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot send offer.');
+        return;
+    }
 
-  console.log(`Sending WebRTC offer to: ${targetSocketId}`);
-  socket.emit('offer', { offer, targetSocketId });
+    console.log(`Sending WebRTC offer to: ${targetSocketId}`);
+    socket.emit('offer', { offer, targetSocketId });
 }
 
 /**
@@ -536,13 +536,13 @@ export function sendOffer(offer, targetSocketId) {
  * 5. Once ICE completes, P2P connection is established
  */
 export function sendAnswer(answer, targetSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot send answer.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot send answer.');
+        return;
+    }
 
-  console.log(`Sending WebRTC answer to: ${targetSocketId}`);
-  socket.emit('answer', { answer, targetSocketId });
+    console.log(`Sending WebRTC answer to: ${targetSocketId}`);
+    socket.emit('answer', { answer, targetSocketId });
 }
 
 /**
@@ -568,13 +568,13 @@ export function sendAnswer(answer, targetSocketId) {
  * - If successful, stops trying other candidates
  */
 export function sendIceCandidate(candidate, targetSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot send ICE candidate.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot send ICE candidate.');
+        return;
+    }
 
-  // Don't log each candidate (too verbose)
-  socket.emit('ice-candidate', { candidate, targetSocketId });
+    // Don't log each candidate (too verbose)
+    socket.emit('ice-candidate', { candidate, targetSocketId });
 }
 
 /**
@@ -590,13 +590,13 @@ export function sendIceCandidate(candidate, targetSocketId) {
  * 3. Both sides should close WebRTC connection
  */
 export function endCall(targetSocketId) {
-  if (!socket || !socket.connected) {
-    console.error('❌ Socket not connected. Cannot end call.');
-    return;
-  }
+    if (!socket || !socket.connected) {
+        console.error('❌ Socket not connected. Cannot end call.');
+        return;
+    }
 
-  console.log(`Ending call with: ${targetSocketId}`);
-  socket.emit('end-call', { targetSocketId });
+    console.log(`Ending call with: ${targetSocketId}`);
+    socket.emit('end-call', { targetSocketId });
 }
 
 /**
@@ -607,7 +607,7 @@ export function endCall(targetSocketId) {
  * @returns {boolean} true if connected and ready to use
  */
 export function isSocketConnected() {
-  return socket && socket.connected;
+    return socket && socket.connected;
 }
 
 /**
@@ -617,12 +617,12 @@ export function isSocketConnected() {
  * Useful for cleanup when leaving the page
  */
 export function disconnectSocket() {
-  if (socket) {
-    socket.disconnect();
-    console.log('🔌 Socket disconnected');
-  }
+    if (socket) {
+        socket.disconnect();
+        console.log('🔌 Socket disconnected');
+    }
 }
 
 export function getSocket() {
-  return socket;
+    return socket;
 }

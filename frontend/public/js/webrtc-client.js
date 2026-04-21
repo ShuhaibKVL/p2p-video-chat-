@@ -240,6 +240,111 @@ export class LocalMediaManager {
   getLocalStream() {
     return this.localStream;
   }
+
+  /**
+   * TOGGLE AUDIO MUTE/UNMUTE
+   * 
+   * Mutes or unmutes the user's microphone
+   * This only affects the LOCAL stream - the user can still hear others
+   * 
+   * HOW IT WORKS:
+   * - Each MediaStream contains tracks (audio + video)
+   * - We find the audio track
+   * - Set track.enabled = false to MUTE (audio won't be sent to peer)
+   * - Set track.enabled = true to UNMUTE
+   * 
+   * @returns {boolean} True if now muted, false if now unmuted
+   */
+  toggleAudioMute() {
+    if (!this.localStream) {
+      console.warn('⚠️ No local stream available to mute');
+      return null;
+    }
+
+    // Get all audio tracks
+    const audioTracks = this.localStream.getAudioTracks();
+    
+    if (audioTracks.length === 0) {
+      console.warn('⚠️ No audio track found');
+      return null;
+    }
+
+    // Toggle the first audio track
+    const audioTrack = audioTracks[0];
+    const isMuted = !audioTrack.enabled;
+    audioTrack.enabled = isMuted; // Toggle enabled state
+
+    console.log(`🔊 Audio ${isMuted ? 'unmuted' : 'muted'}`);
+    return !isMuted; // Return true if muted, false if unmuted
+  }
+
+  /**
+   * GET AUDIO MUTE STATUS
+   * 
+   * Check if microphone is currently muted
+   * 
+   * @returns {boolean} True if muted, false if unmuted, null if no stream
+   */
+  isAudioMuted() {
+    if (!this.localStream) {
+      return null;
+    }
+
+    const audioTracks = this.localStream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      return null;
+    }
+
+    return !audioTracks[0].enabled; // enabled=false means muted
+  }
+
+  /**
+   * TOGGLE VIDEO MUTE/UNMUTE (Camera on/off)
+   * 
+   * Turns the user's camera on or off
+   * 
+   * @returns {boolean} True if now muted (camera off), false if unmuted (camera on)
+   */
+  toggleVideoMute() {
+    if (!this.localStream) {
+      console.warn('⚠️ No local stream available to mute');
+      return null;
+    }
+
+    const videoTracks = this.localStream.getVideoTracks();
+    
+    if (videoTracks.length === 0) {
+      console.warn('⚠️ No video track found');
+      return null;
+    }
+
+    const videoTrack = videoTracks[0];
+    const isVideoOff = !videoTrack.enabled;
+    videoTrack.enabled = isVideoOff; // Toggle enabled state
+
+    console.log(`📹 Camera ${isVideoOff ? 'on' : 'off'}`);
+    return !isVideoOff; // Return true if camera off, false if camera on
+  }
+
+  /**
+   * GET VIDEO MUTE STATUS
+   * 
+   * Check if camera is currently off
+   * 
+   * @returns {boolean} True if camera off, false if camera on, null if no stream
+   */
+  isVideoMuted() {
+    if (!this.localStream) {
+      return null;
+    }
+
+    const videoTracks = this.localStream.getVideoTracks();
+    if (videoTracks.length === 0) {
+      return null;
+    }
+
+    return !videoTracks[0].enabled; // enabled=false means camera off
+  }
 }
 
 // ============================================================================

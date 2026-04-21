@@ -35,6 +35,8 @@ export default function Home() {
   const [hasRemoteStream, setHasRemoteStream] = useState(false);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Initializing...');
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
   const initRef = useRef(false);
 
   // =========================================================================
@@ -140,9 +142,33 @@ export default function Home() {
       handleEndCall();
       setSelectedPeer(null);
       setHasRemoteStream(false);
+      setIsAudioMuted(false);
+      setIsVideoMuted(false);
       setStatus('Call ended');
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleToggleMute = async () => {
+    try {
+      const { callState } = await initializeCallFlow();
+      const muted = callState.localMediaManager.toggleAudioMute();
+      setIsAudioMuted(!muted); // Toggle the state
+      setStatus(muted ? '🔇 Muted' : '🔊 Unmuted');
+    } catch (err) {
+      console.error('Failed to toggle mute:', err);
+    }
+  };
+
+  const handleToggleCamera = async () => {
+    try {
+      const { callState } = await initializeCallFlow();
+      const cameraOff = callState.localMediaManager.toggleVideoMute();
+      setIsVideoMuted(!cameraOff); // Toggle the state
+      setStatus(cameraOff ? '📹 Camera off' : '📹 Camera on');
+    } catch (err) {
+      console.error('Failed to toggle camera:', err);
     }
   };
 
@@ -279,12 +305,34 @@ export default function Home() {
                 </div>
                 <div style={styles.callControls}>
                   {isInCall && (
-                    <button
-                      onClick={handleEndCallClick}
-                      style={{ ...styles.button, background: '#f44336' }}
-                    >
-                      🛑 End Call
-                    </button>
+                    <>
+                      <div style={styles.callControlsRow}>
+                        <button
+                          onClick={handleToggleMute}
+                          style={{
+                            ...styles.button,
+                            background: isAudioMuted ? '#f44336' : '#4caf50'
+                          }}
+                        >
+                          {isAudioMuted ? '🔇 Unmute' : '🔊 Mute'}
+                        </button>
+                        <button
+                          onClick={handleToggleCamera}
+                          style={{
+                            ...styles.button,
+                            background: isVideoMuted ? '#f44336' : '#4caf50'
+                          }}
+                        >
+                          {isVideoMuted ? '📷 Camera On' : '📹 Camera Off'}
+                        </button>
+                        <button
+                          onClick={handleEndCallClick}
+                          style={{ ...styles.button, background: '#f44336' }}
+                        >
+                          🛑 End Call
+                        </button>
+                      </div>
+                    </>
                   )}
                   {!isInCall && selectedPeer && (
                     <p style={styles.hint}>⏳ Connecting to {selectedPeer.username}...</p>

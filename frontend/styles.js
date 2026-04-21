@@ -174,8 +174,15 @@ export const styles = {
   },
   callControls: {
     display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginTop: '15px'
+  },
+  callControlsRow: {
+    display: 'flex',
     justifyContent: 'center',
-    gap: '10px'
+    gap: '10px',
+    flexWrap: 'wrap'
   },
 
   // Footer
